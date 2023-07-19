@@ -6,7 +6,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { User } from 'src/user/entities/user.entity';
-
+import * as redisStore from 'cache-manager-redis-store';
+import { CacheModule } from '@nestjs/cache-manager';
 @Module({
   controllers: [ConversationController],
   providers: [
@@ -18,6 +19,14 @@ import { User } from 'src/user/entities/user.entity';
   ],
   exports: [ConversationService],
   imports: [
+    CacheModule.register({
+      store: redisStore,
+      socket: {
+        host: 'localhost',
+        port: 6379,
+      },
+      ttl: 25,
+    }),
     TypeOrmModule.forFeature([Conversation]),
     TypeOrmModule.forFeature([User]),
   ],

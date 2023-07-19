@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UseGuards,
   Request,
+  Inject,
 } from '@nestjs/common';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
@@ -13,6 +14,8 @@ import { Raw, Repository } from 'typeorm';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { User } from 'src/user/entities/user.entity';
 import { In } from 'typeorm';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @UseGuards(AuthGuard)
 @Injectable()
@@ -22,6 +25,7 @@ export class ConversationService {
     private conversationRepository: Repository<Conversation>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   // getMessageInConversation(+user_id, limits, skip, conversation_id);
@@ -192,7 +196,7 @@ export class ConversationService {
   //   return convers;
   // }
 
-  async getUserConversation(user_id: number): Promise<Conversation[]> {
+  async getUserConversation(user_id: number): Promise<any> {
     // const convers = await this.conversationRepository.find({
     // where: {
     //   members: Raw((alias) => `${alias} @> ARRAY['${user_id}']`),
@@ -208,7 +212,34 @@ export class ConversationService {
       .where(`:user_id = ANY(conversation.members)`, { user_id: user_id }) //sử dụng mệnh đề where và mệnh đề ANY, chúng ta so sánh user_id với mỗi phần tử trong mảng members
       .getMany(); //getMany để lấy danh sách các conversation tìm thấy.
 
-    return conversations;
+    if (conversations.length < 1) {
+      //không có cuộc trò chuyện
+      const data = {
+        message: 'Không có cuộc trò chuyện nào',
+        data: conversations,
+        status: 'xxx',
+      };
+
+      return data;
+    }
+
+    const data = {
+      message: `${user_id} lấy các cuộc trò chuyện thành công`,
+      data: conversations,
+      status: 'xxx',
+    };
+
+    const test = await this.cacheManager.set(
+      `getConversation_${user_id}`,
+      data,
+      { ttl: 25 },
+    );
+    if (!test) {
+      console.log(test);
+      console.log(' dữ liệu lên redis');
+    }
+
+    return data;
 
     // return 'API for user get all conversation';
   }

@@ -4,7 +4,6 @@ import {
   Inject,
   Injectable,
   UnauthorizedException,
-  UseInterceptors,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './entities/user.entity';
@@ -14,14 +13,9 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Oauth } from 'src/oauth/entities/oauth.entity';
 import { getDistance } from 'geolib';
-import {
-  CACHE_MANAGER,
-  CACHE_TTL_METADATA,
-  CacheInterceptor,
-} from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { redisStore } from 'cache-manager-redis-store';
-import { log } from 'console';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+
 @Injectable()
 export class UserService {
   constructor(
@@ -119,9 +113,16 @@ export class UserService {
     // TODO: FIX
 
     // await this.cacheManager.set('test', nearbyUsers,   );
-    const test = await this.cacheManager.set('test', nearbyUsers, 5);
-    console.log(test);
-    console.log(' dữ liệu lên redis');
+    const test = await this.cacheManager.set(
+      `nearByUser_${currentUser.user_id}`,
+      nearbyUsers,
+      { ttl: 20 },
+    );
+    if (!test) {
+      console.log(test);
+      console.log(' dữ liệu lên redis');
+    }
+
     return nearbyUsers;
   }
   // this.setWithExpiration('nearbyUsers', nearbyUsers.toString(), 15);

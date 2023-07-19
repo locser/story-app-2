@@ -6,13 +6,30 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Oauth } from 'src/oauth/entities/oauth.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { config } from 'dotenv';
-import { RedisModule, RedisService } from 'nestjs-redis';
+
+import { CacheInterceptor, CacheModule } from '@nestjs/cache-manager';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import * as redisStore from 'cache-manager-redis-store';
 
 config();
 @Module({
   controllers: [UserController],
-  providers: [UserService],
+  providers: [
+    UserService,
+    // {
+    //   provide: APP_INTERCEPTOR,
+    //   useClass: CacheInterceptor,
+    // },
+  ],
   imports: [
+    CacheModule.register({
+      store: redisStore,
+      socket: {
+        host: 'localhost',
+        port: 6379,
+      },
+      ttl: 25,
+    }),
     TypeOrmModule.forFeature([User]),
     TypeOrmModule.forFeature([Oauth]),
     JwtModule.register({
@@ -20,27 +37,6 @@ config();
       secret: process.env.TOKEN_SECRET,
       signOptions: { expiresIn: '1d' },
     }),
-    // RedisModule.register({
-    //   host: 'localhost',
-    //   port: 6379,
-    //   password: 'your_password',
-    //   db: 0,
-    // }),
-    // RedisModule,
-    // RedisService,
-    // CacheModule.registerAsync({
-    //   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    //   // @ts-ignore
-    //   useFactory: async () => {
-    //     return {
-    //       store: await redisStore({
-    //         url: `redis://:${process.env.CONFIG_REDIS_PASSWORD}@${process.env.CONFIG_REDIS_HOST}:${process.env.CONFIG_REDIS_PORT}/${process.env.CONFIG_REDIS_DB}`,
-    //       }),
-    //       ttl: process.env.CONFIG_REDIS_TTLS,
-    //     };
-    //   },
-    //   isGlobal: true,
-    // }),
   ],
   exports: [UserModule],
 })

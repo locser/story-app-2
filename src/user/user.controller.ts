@@ -73,6 +73,8 @@ export class UserController {
   // @CacheTTL(6) // Dữ liệu cache sẽ tồn tại trong 60 giây
   // @CacheKey('nearMe') // Sử dụng 'user:id' làm khóa cache
   @Get('nearMe')
+  // @CacheKey(`nearMe_${}`) // Sử dụng 'user:id' làm khóa cache
+  // @CacheTTL(30) // Dữ liệu cache sẽ tồn tại trong 60 giây
   userNearMe(@Body() body, @Request() req) {
     const { radius, numberUserNearMe } = body;
     const user_id = req.user.user_id;
