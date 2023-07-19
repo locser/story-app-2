@@ -8,11 +8,19 @@ import {
   Delete,
   UseGuards,
   Request,
+  UseInterceptors,
+  Inject,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Public } from 'src/auth/auth.guard';
+import {
+  CACHE_MANAGER,
+  CacheInterceptor,
+  CacheKey,
+  CacheTTL,
+} from '@nestjs/cache-manager';
 
 @Controller('user')
 export class UserController {
@@ -22,6 +30,15 @@ export class UserController {
   @Post('register')
   register(@Body() createUserDto: CreateUserDto) {
     return this.userService.register(createUserDto);
+  }
+
+  @Delete('/deleteCache')
+  deleteCache() {
+    return this.userService.deleteCache();
+  }
+  @Get('/connectRedis')
+  connectRedis() {
+    return this.userService.connectRedis();
   }
 
   @Public()
@@ -51,6 +68,10 @@ export class UserController {
   //   return this.userService.remove(+id);
   // }
 
+  //Redis
+  // @UseInterceptors(CacheInterceptor)
+  // @CacheTTL(6) // Dữ liệu cache sẽ tồn tại trong 60 giây
+  // @CacheKey('nearMe') // Sử dụng 'user:id' làm khóa cache
   @Get('nearMe')
   userNearMe(@Body() body, @Request() req) {
     const { radius, numberUserNearMe } = body;

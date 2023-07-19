@@ -24,5 +24,6 @@ module.exports = {
     // fix for delete eslint :delete cr
     'prettier/prettier': ['error', { endOfLine: 'auto' }],
     '@typescript-eslint/no-unused-vars': 'off',
+    'prettier/prettier': 'off',
   },
 };

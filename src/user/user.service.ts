@@ -1,11 +1,12 @@
 import {
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,7 +14,14 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Oauth } from 'src/oauth/entities/oauth.entity';
 import { getDistance } from 'geolib';
-
+import {
+  CACHE_MANAGER,
+  CACHE_TTL_METADATA,
+  CacheInterceptor,
+} from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+import { redisStore } from 'cache-manager-redis-store';
+import { log } from 'console';
 @Injectable()
 export class UserService {
   constructor(
@@ -22,6 +30,7 @@ export class UserService {
     @InjectRepository(Oauth)
     private oauthRepository: Repository<Oauth>,
     private jwtService: JwtService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async findNearMe(
@@ -36,9 +45,19 @@ export class UserService {
 
     const LIMIT_USER = 20;
 
+    // const getFromRedis = JSON.parse(await this.cacheManager.get('test'));
+    // console.log(getFromRedis, 'qqqq');
+    // if (getFromRedis !== null) {
+    //   console.log(getFromRedis);
+    //   console.log('findNearMe từ redis');
+
+    //   return getFromRedis;
+    // }
+
     const currentUser = await this.userRepository.findOne({
       where: { user_id: user_id },
     });
+    console.log('Bay tới server và get user Near Me');
 
     // console.log(currentUser);
 
@@ -97,8 +116,40 @@ export class UserService {
       (nearbyUser) => nearbyUser.user_id !== currentUser.user_id,
     );
 
+    // TODO: FIX
+
+    // await this.cacheManager.set('test', nearbyUsers,   );
+    const test = await this.cacheManager.set('test', nearbyUsers, 5);
+    console.log(test);
+    console.log(' dữ liệu lên redis');
     return nearbyUsers;
   }
+  // this.setWithExpiration('nearbyUsers', nearbyUsers.toString(), 15);
+
+  // const value = await this.cacheManager.get('key');
+  // const saveToRedis = this.saveKeyToRedis('test', nearbyUsers, 5);
+
+  async deleteCache() {
+    console.log('delete entire cacheManeger thành công');
+    await this.cacheManager.reset();
+  }
+  async saveKeyToRedis(key: string, value: unknown, ttl?: number) {
+    // const client = this.cacheManager;
+    await this.cacheManager.set(key, value, ttl); // default ttl = 5s
+  }
+
+  connectRedis() {
+    const redisStore = '';
+  }
+
+  // async setWithExpiration(
+  //   key: string,
+  //   value: string,
+  //   expiresIn: number,
+  // ): Promise<void> {
+  //   const client = this.redisService.getClient();
+  //   await client.set(key, value, 'EX', expiresIn);
+  // }
 
   async getDistanceUser(
     lat: string,
@@ -124,7 +175,7 @@ export class UserService {
       }
     }
 
-    console.log(nearbyUsers, 'getUserDistance');
+    // console.log(nearbyUsers, 'getUserDistance');
 
     return nearbyUsers;
   }
