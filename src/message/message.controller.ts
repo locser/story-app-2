@@ -11,10 +11,26 @@ import {
 import { MessageService } from './message.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
+import { Conversation } from 'src/conversation/entities/conversation.entity';
 
 @Controller('message')
 export class MessageController {
   constructor(private readonly messageService: MessageService) {}
+
+  @Get('/findMessageByElasticSearch')
+  findMessageByElasticSearch(@Body() body, @Request() req) {
+    const { text, conversation_id } = body;
+    const { user_id } = req.user;
+    if (text.length <= 0) {
+      throw new Error('Message không được để trống!');
+    }
+
+    return this.messageService.findMessageInConversationByElasticSearch(
+      text,
+      +user_id,
+      +conversation_id,
+    );
+  }
 
   @Post()
   create(@Body() createMessageDto: CreateMessageDto, @Request() req) {

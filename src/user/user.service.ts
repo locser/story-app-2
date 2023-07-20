@@ -1,3 +1,4 @@
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   HttpException,
   HttpStatus,
@@ -5,16 +6,17 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import * as bcrypt from 'bcrypt';
+import { Cache } from 'cache-manager';
+import { getDistance } from 'geolib';
+import { Oauth } from 'src/oauth/entities/oauth.entity';
+import { In, Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './entities/user.entity';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
-import { Oauth } from 'src/oauth/entities/oauth.entity';
-import { getDistance } from 'geolib';
-import { Cache } from 'cache-manager';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import UsersSearchService from './userSearchService.service';
+import { log } from 'console';
 
 @Injectable()
 export class UserService {
@@ -25,6 +27,7 @@ export class UserService {
     private oauthRepository: Repository<Oauth>,
     private jwtService: JwtService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private userSearchService: UsersSearchService,
   ) {}
 
   async findNearMe(
@@ -38,15 +41,6 @@ export class UserService {
     // Radius: 100 (đơn vị: km)
 
     const LIMIT_USER = 20;
-
-    // const getFromRedis = JSON.parse(await this.cacheManager.get('test'));
-    // console.log(getFromRedis, 'qqqq');
-    // if (getFromRedis !== null) {
-    //   console.log(getFromRedis);
-    //   console.log('findNearMe từ redis');
-
-    //   return getFromRedis;
-    // }
 
     const currentUser = await this.userRepository.findOne({
       where: { user_id: user_id },
@@ -125,32 +119,11 @@ export class UserService {
 
     return nearbyUsers;
   }
-  // this.setWithExpiration('nearbyUsers', nearbyUsers.toString(), 15);
-
-  // const value = await this.cacheManager.get('key');
-  // const saveToRedis = this.saveKeyToRedis('test', nearbyUsers, 5);
 
   async deleteCache() {
     console.log('delete entire cacheManeger thành công');
     await this.cacheManager.reset();
   }
-  async saveKeyToRedis(key: string, value: unknown, ttl?: number) {
-    // const client = this.cacheManager;
-    await this.cacheManager.set(key, value, ttl); // default ttl = 5s
-  }
-
-  connectRedis() {
-    const redisStore = '';
-  }
-
-  // async setWithExpiration(
-  //   key: string,
-  //   value: string,
-  //   expiresIn: number,
-  // ): Promise<void> {
-  //   const client = this.redisService.getClient();
-  //   await client.set(key, value, 'EX', expiresIn);
-  // }
 
   async getDistanceUser(
     lat: string,
@@ -192,6 +165,8 @@ export class UserService {
       });
 
       if (eUser) {
+        console.log('Người dùng đã tồn tại!');
+
         throw new HttpException(
           'User with that email already exists',
           HttpStatus.BAD_REQUEST,
@@ -210,12 +185,18 @@ export class UserService {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
+      console.log('User repository create user');
 
       createdUser = await this.userRepository.save(createdUser);
       //delete password before response
       createdUser.password = undefined;
 
-      console.log('ddawng ki thanh cong');
+      //create index search user
+
+      const result = await this.userSearchService.indexUser(createdUser);
+      if (result) {
+        console.log(result + '/n IndexUser thành công');
+      }
 
       return createdUser;
     } catch (error) {
@@ -273,6 +254,7 @@ export class UserService {
     const eUser = this.userRepository.findOne({
       where: { username: username },
     });
+    console.log('sử dụng findByUsername');
     return eUser;
   }
   async create(createUserDto: CreateUserDto) {
@@ -289,20 +271,47 @@ export class UserService {
       user_id: newUser.user_id,
       username: newUser.username,
     };
-    // const token = await this.jwtService.signAsync(payload);
-
-    // const oauth = this.oauthService.create({
-    //   user_id: newUser.user_id,
-    //   access_token: token,
-    // });
-
-    // if (oauth) {
-    //   console.log('save oauth token thanh cong!');
-    // }
 
     const nUser = await this.userRepository.save(newUser);
     return nUser;
   }
+
+  async searchForUserElasticsearch(
+    text: string,
+    user_id: number,
+  ): Promise<any> {
+    const results = await this.userSearchService.search(text);
+    console.log(results);
+
+    if (results === undefined || results.length === 0) {
+      return [];
+    }
+    const ids = results.filter(
+      (result) => result.user_id + '' !== user_id + '',
+    );
+    return ids;
+
+    // const ids = results.map((result) => result);
+
+    // if (!ids.length) {
+    //   return [];
+    // }
+    // return ids;
+  }
+
+  //search user elas
+
+  //findByUsername
+  // const token = await this.jwtService.signAsync(payload);
+
+  // const oauth = this.oauthService.create({
+  //   user_id: newUser.user_id,
+  //   access_token: token,
+  // });
+
+  // if (oauth) {
+  //   console.log('save oauth token thanh cong!');
+  // }
 
   // findAll() {
   //   return `This action returns all user`;

@@ -10,11 +10,10 @@ export class CreateMessageDto {
   @IsNotEmpty()
   conversation_id: number;
 
-  user_id: number;
-
   @IsNotEmpty()
   type: number;
 
+  @IsNotEmpty()
   @IsString()
   message: string;
 

@@ -15,4 +15,7 @@ export class CreateUserDto {
 
   @IsNotEmpty()
   password: string;
+  phone: string;
+
+  //TODO:  add properties for object
 }

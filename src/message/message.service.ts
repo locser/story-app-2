@@ -7,8 +7,9 @@ import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Message } from './entities/message.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Conversation } from 'src/conversation/entities/conversation.entity';
+import MessageSearchService from './messageSearchService.service';
 
 @Injectable()
 export class MessageService {
@@ -17,39 +18,116 @@ export class MessageService {
     private messageRepository: Repository<Message>,
     @InjectRepository(Conversation)
     private conversationRepository: Repository<Conversation>,
+    private messageSearchService: MessageSearchService,
   ) {}
 
-  async create(
-    createMessageDto: CreateMessageDto,
+  async checkUserAndConversation(
     user_id: number,
-  ): Promise<Message> {
-    //check conversation valid
-    const newConversation = await this.conversationRepository.findOne({
-      where: { conversation_id: createMessageDto.conversation_id },
+    conversation_id: number,
+  ): Promise<any> {
+    const conver = await this.conversationRepository.findOne({
+      where: { conversation_id: conversation_id },
     });
-    if (!newConversation) {
+    if (!conver) {
       console.log('Cuộc trò chuyện này không tìm thấy');
       throw new Error('Cuộc trò chuyện này không tìm thấy');
     }
     //check conver member include current user
-    if (!newConversation.members.includes(+user_id)) {
+    if (!conver.members.includes(+user_id)) {
       console.log('Không có quyền truy cập cuộc trò chuyện này!');
       throw new BadRequestException(
         'Không có quyền truy cập cuộc trò chuyện này!',
       );
     }
 
-    const newMessage = this.messageRepository.create({
+    return true;
+  }
+
+  async create(
+    createMessageDto: CreateMessageDto,
+    user_id: number,
+  ): Promise<any> {
+    //check conversation valid
+    // const newConversation = await this.conversationRepository.findOne({
+    //   where: { conversation_id: createMessageDto.conversation_id },
+    // });
+    // if (!newConversation) {
+    //   console.log('Cuộc trò chuyện này không tìm thấy');
+    //   throw new Error('Cuộc trò chuyện này không tìm thấy');
+    // }
+    // //check conver member include current user
+    // if (!newConversation.members.includes(+user_id)) {
+    //   console.log('Không có quyền truy cập cuộc trò chuyện này!');
+    //   throw new BadRequestException(
+    //     'Không có quyền truy cập cuộc trò chuyện này!',
+    //   );
+    // }
+
+    const checked = this.checkUserAndConversation(
+      +user_id,
+      +createMessageDto.conversation_id,
+    );
+
+    if (!checked) {
+      return {
+        message: 'Bạn không có quyền truy cập',
+        data: [],
+        status: 'xxx',
+      };
+    }
+    const nMessage = this.messageRepository.create({
       ...createMessageDto,
       user_id: user_id,
     });
 
-    if (!newMessage) {
+    if (!nMessage) {
       console.log('Gửi tin nhắn không thành công');
-
       throw new Error('Gửi tin nhắn không thành công');
     }
-    return await this.messageRepository.save(newMessage);
+    const newMessage = await this.messageRepository.save(nMessage);
+
+    //create message index
+    const result = await this.messageSearchService.indexMessage(newMessage);
+    if (result) {
+      console.log(result + '/n indexMessage thành công');
+    }
+    return newMessage;
+  }
+
+  async findMessageInConversationByElasticSearch(
+    text: string,
+    user_id: number,
+    conversation_id: number,
+  ): Promise<any> {
+    const checked = this.checkUserAndConversation(+user_id, +conversation_id);
+
+    if (!checked) {
+      return {
+        message: 'Bạn không có quyền truy cập',
+        data: [],
+        status: 'xxx',
+      };
+    }
+
+    const results = await this.messageSearchService.search(
+      text,
+      +conversation_id,
+    );
+    console.log(results);
+    console.log('- findMessageByElasticSearch - results');
+
+    if (results === undefined || results.length === 0) {
+      return [];
+    }
+
+    // const ids = results.map((result) => result);
+    // console.log(ids);
+    // console.log('- findMessageByElasticSearch - ids');
+    // if (!ids.length) {
+    //   return [];
+    // }
+    return results;
+    // return ids;
   }
 
   //get all message from conversation

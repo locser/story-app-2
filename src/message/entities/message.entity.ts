@@ -32,7 +32,7 @@ export class Message {
   @Column({ type: 'int' })
   type: number;
 
-  @Column({ type: 'varchar', length: 200 })
+  @Column({ type: 'varchar', length: 500 })
   message: string;
 
   @Column({ type: 'int', default: 0 })
