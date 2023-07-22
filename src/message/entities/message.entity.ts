@@ -29,10 +29,10 @@ export class Message {
   @Column({ type: 'bigint' })
   user_id: number;
 
-  @Column({ type: 'int' })
+  @Column({ type: 'int', default: 0 })
   type: number;
 
-  @Column({ type: 'varchar', length: 500 })
+  @Column({ type: 'varchar', length: 500, default: '' })
   message: string;
 
   @Column({ type: 'int', default: 0 })

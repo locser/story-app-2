@@ -10,9 +10,8 @@ export class CreateConversationDto {
   @IsNotEmpty()
   name: string;
 
-  @IsNotEmpty()
   avatar: string;
-
+  @IsNotEmpty()
   members: number[];
 
   background: string;

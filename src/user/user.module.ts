@@ -11,6 +11,7 @@ import { ConfigModule } from '@nestjs/config';
 import * as redisStore from 'cache-manager-redis-store';
 import UsersSearchService from './userSearchService.service';
 import { ElasticsearchModule } from '@nestjs/elasticsearch';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 config();
 @Module({
@@ -44,7 +45,12 @@ config();
       signOptions: { expiresIn: '1d' },
     }),
     ConfigModule,
+
+    EventEmitterModule.forRoot({
+      wildcard: true, // Cho phép phát ra tất cả các sự kiện với ký tự đại diện (*)
+      delimiter: '.', // Ký tự phân tách các phần của tên sự kiện (ví dụ: 'user.created')
+    }),
   ],
-  exports: [UserModule],
+  exports: [UserService],
 })
 export class UserModule {}

@@ -13,25 +13,32 @@ import { Oauth } from './oauth/entities/oauth.entity';
 import { OauthModule } from './oauth/oauth.module';
 import { User } from './user/entities/user.entity';
 import { UserModule } from './user/user.module';
-// import { RedisStore } from 'cache-manager-redis-store';
-import { CacheModule } from '@nestjs/cache-manager';
+import { GatewayModule } from './gateway/gateway.module';
+import { CacheInterceptor, CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { FriendRequestModule } from './friend-request/friend-request.module';
+import { FriendModule } from './friend/friend.module';
+import { FriendRequest } from './friend-request/entities/friend-request.entity';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { GatewayDB } from './gateway/entity/gatewayDB.entity';
+
 config();
 
 @Module({
   imports: [
-    // ConfigModule.forRoot(), // Make sure to import ConfigModule
-    // ElasticsearchModule.registerAsync({
-    //   imports: [ConfigModule], // Import ConfigModule here as well
-    //   useFactory: async (configService: ConfigService) => ({
-    //     node: configService.get('ELASTICSEARCH_NODE'), // Set the Elasticsearch node URL from the configuration
-    //     auth: {
-    //       username: configService.get('ELASTICSEARCH_USERNAME'), // Set the username if needed
-    //       password: configService.get('ELASTICSEARCH_PASSWORD'), // Set the password if needed
-    //     },
-    //   }),
-    //   inject: [ConfigService], // Inject ConfigService to use it in the useFactory function
-    // }),
+    GatewayModule,
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'postgres',
+      password: 'Loc123@@',
+      database: 'overate-app',
+      entities: [Conversation, Message, User, Oauth, FriendRequest, GatewayDB],
+      // synchronize: true,
+      // autoLoadEntities: true,
+    }),
 
     CacheModule.register({
       store: redisStore,
@@ -41,17 +48,9 @@ config();
       },
       ttl: 25,
     }),
-
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'Loc123@@',
-      database: 'overate-app',
-      entities: [Conversation, Message, User, Oauth],
-      // synchronize: true,
-      // autoLoadEntities: true,
+    EventEmitterModule.forRoot({
+      wildcard: true, // Cho phép phát ra tất cả các sự kiện với ký tự đại diện (*)
+      delimiter: '.', // Ký tự phân tách các phần của tên sự kiện (ví dụ: 'user.created')
     }),
 
     ConversationModule,
@@ -59,15 +58,17 @@ config();
     OauthModule,
     UserModule,
     AuthModule,
+    FriendRequestModule,
+    FriendModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     //TODO: interceptor redis
-    // {
-    //   provide: APP_INTERCEPTOR,
-    //   useClass: CacheInterceptor,
-    // },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: CacheInterceptor,
+    },
   ],
   exports: [],
 })

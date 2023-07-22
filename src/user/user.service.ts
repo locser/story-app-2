@@ -16,7 +16,7 @@ import { In, Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './entities/user.entity';
 import UsersSearchService from './userSearchService.service';
-import { log } from 'console';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class UserService {
@@ -28,6 +28,7 @@ export class UserService {
     private jwtService: JwtService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private userSearchService: UsersSearchService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   async findNearMe(
@@ -290,13 +291,14 @@ export class UserService {
       (result) => result.user_id + '' !== user_id + '',
     );
     return ids;
+  }
 
-    // const ids = results.map((result) => result);
+  async sendFriendRequest(toUser_id: number, user_id: number) {
+    const user = await this.userRepository.findOne({
+      where: { user_id: toUser_id },
+    });
 
-    // if (!ids.length) {
-    //   return [];
-    // }
-    // return ids;
+    // if(!)
   }
 
   //search user elas

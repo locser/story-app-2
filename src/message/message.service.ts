@@ -10,6 +10,8 @@ import { Message } from './entities/message.entity';
 import { In, Repository } from 'typeorm';
 import { Conversation } from 'src/conversation/entities/conversation.entity';
 import MessageSearchService from './messageSearchService.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CreateMessageResponse } from 'src/utils/types';
 
 @Injectable()
 export class MessageService {
@@ -19,6 +21,7 @@ export class MessageService {
     @InjectRepository(Conversation)
     private conversationRepository: Repository<Conversation>,
     private messageSearchService: MessageSearchService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   async checkUserAndConversation(
@@ -86,11 +89,26 @@ export class MessageService {
     }
     const newMessage = await this.messageRepository.save(nMessage);
 
+    const conversation = await this.conversationRepository.findOne({
+      where: { conversation_id: createMessageDto.conversation_id },
+    });
+
+    conversation.last_message_id = newMessage.message_id;
+
+    const newConversation = await this.conversationRepository.save(
+      conversation,
+    );
     //create message index
     const result = await this.messageSearchService.indexMessage(newMessage);
     if (result) {
       console.log(result + '/n indexMessage thành công');
     }
+    //gọi message.create trong socket gateway
+    const payload: CreateMessageResponse = {
+      message: newMessage,
+      conversation: newConversation,
+    };
+    this.eventEmitter.emit('message.create', payload);
     return newMessage;
   }
 

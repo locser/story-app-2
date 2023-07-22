@@ -27,5 +27,6 @@ import MessageSearchService from './messageSearchService.service';
     TypeOrmModule.forFeature([Message]),
     TypeOrmModule.forFeature([Conversation]),
   ],
+  exports: [MessageService],
 })
 export class MessageModule {}

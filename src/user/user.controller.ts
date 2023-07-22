@@ -52,6 +52,11 @@ export class UserController {
     return this.userService.searchForUserElasticsearch(text, +user_id);
   }
 
+  @Get('sendFriendRequest/:user_id')
+  sendFriendRequest(@Param('user_id') user_id: number, @Request() req) {
+    return this.userService.sendFriendRequest(+user_id, +req.user.user_id);
+  }
+
   // @Get()
   // findAll() {
   //   return this.userService.findAll();

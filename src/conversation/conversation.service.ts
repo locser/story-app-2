@@ -58,6 +58,10 @@ export class ConversationService {
     return conver;
   }
 
+  hasAccess(member: number[], user_id: number): boolean {
+    return member.includes(user_id);
+  }
+
   async createConversation(
     conversationDto: CreateConversationDto,
     user_id: number,

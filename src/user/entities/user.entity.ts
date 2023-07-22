@@ -57,4 +57,7 @@ export class User {
   @Column({ type: 'text' })
   @IsNotEmpty()
   password: string;
+
+  @Column('int', { array: true, default: [] })
+  friends: number[];
 }
