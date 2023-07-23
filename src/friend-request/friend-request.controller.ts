@@ -19,8 +19,9 @@ export class FriendRequestController {
   @Throttle(3, 10) //giới hạn số lần một yêu cầu được gửi trong một khoảng thời gian nhất định.
   @Post() // giới hạn 3 lần cho 10s
   create(@Body() body: CreateFriendRequestDto, @Request() request) {
-    const user_id = request.user.user_id;
-    return this.friendRequestService.create(body, +user_id);
+    const user = request.user;
+    const username = body.username;
+    return this.friendRequestService.create(user, username);
   }
 
   // @Get(':id')

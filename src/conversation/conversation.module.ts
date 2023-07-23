@@ -8,6 +8,7 @@ import { AuthGuard } from 'src/auth/auth.guard';
 import { User } from 'src/user/entities/user.entity';
 import * as redisStore from 'cache-manager-redis-store';
 import { CacheModule } from '@nestjs/cache-manager';
+import { ElasticsearchModule } from '@nestjs/elasticsearch';
 @Module({
   controllers: [ConversationController],
   providers: [
@@ -19,6 +20,9 @@ import { CacheModule } from '@nestjs/cache-manager';
   ],
   exports: [ConversationService],
   imports: [
+    ElasticsearchModule.register({
+      node: 'http://127.0.0.1:9200',
+    }),
     CacheModule.register({
       store: redisStore,
       socket: {

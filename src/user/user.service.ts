@@ -17,6 +17,15 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './entities/user.entity';
 import UsersSearchService from './userSearchService.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { plainToClass } from 'class-transformer';
+import { UserMapResponse } from './types/userMapResponse';
+import {
+  CreateIndexUserError,
+  UserAlreadyExists,
+  UserNotFoundException,
+  UserNotUpdatePositionException,
+} from './exceptions/userException';
+import { ResponseMap } from 'src/utils/responseMap';
 
 @Injectable()
 export class UserService {
@@ -43,82 +52,76 @@ export class UserService {
 
     const LIMIT_USER = 20;
 
-    const currentUser = await this.userRepository.findOne({
-      where: { user_id: user_id },
-    });
-    console.log('Bay tới server và get user Near Me');
+    try {
+      const currentUser: User = await this.findByUserId(user_id);
+      // console.log('Bay tới server và get user Near Me');
 
-    // console.log(currentUser);
+      if (!currentUser) {
+        throw new UserNotFoundException();
+      }
+      //check lng lat
+      if (currentUser.lat === '' || currentUser.lng === '') {
+        throw new UserNotUpdatePositionException();
+      }
 
-    if (!currentUser) {
-      throw new Error(`User ${user_id} not found`);
-    }
-
-    //check lng lat
-    if (currentUser.lat === '' || currentUser.lng === '') {
-      throw new Error(`Hãy cập nhật đầy đủ vị trí của bạn để tìm kiếm dễ dàng`);
-    }
-
-    const users = await this.userRepository.find({
-      take: LIMIT_USER,
-      skip: 0,
-    });
-
-    let nearbyUsers: User[] = [];
-
-    const userNearMe1 = this.getDistanceUser(
-      currentUser.lat,
-      currentUser.lng,
-      radius,
-      users,
-    );
-    // console.log(userNearMe1, 'userNearMe1');
-    (await userNearMe1).forEach((user: User) => {
-      nearbyUsers.push(user);
-    });
-
-    //or
-    //let nearbyUsers: User[] = userNearMe1.map((user: User) => user);
-
-    // console.log(nearbyUsers);
-
-    if (nearbyUsers.length === 0) {
-      //cho nó tìm thêm 10 th nữa xem có ai gần không
       const users = await this.userRepository.find({
-        take: 10,
-        skip: 10,
+        take: LIMIT_USER,
+        skip: 0,
       });
-      const userNearMe2 = this.getDistanceUser(
+
+      let nearbyUsers: User[] = [];
+      const userNearMe1 = await this.getDistanceUser(
         currentUser.lat,
         currentUser.lng,
         radius,
         users,
       );
-      (await userNearMe2).forEach((user: User) => {
-        nearbyUsers.push(user);
-      });
-      // console.log(nearbyUsers);
+      // console.log(userNearMe1, 'userNearMe1');
+      nearbyUsers = [...nearbyUsers, ...userNearMe1];
+
+      if (nearbyUsers.length === 0) {
+        //cho nó tìm thêm 10 th nữa xem có ai gần không
+        const users = await this.userRepository.find({
+          take: 10,
+          skip: 10,
+        });
+        const userNearMe2: User[] = await this.getDistanceUser(
+          currentUser.lat,
+          currentUser.lng,
+          radius,
+          users,
+        );
+        nearbyUsers = [...nearbyUsers, ...userNearMe2];
+      }
+
+      //loại current user
+      nearbyUsers = nearbyUsers.filter(
+        (nearbyUser) => nearbyUser.user_id !== currentUser.user_id,
+      );
+
+      const userResponses = nearbyUsers.map((user) =>
+        plainToClass(UserMapResponse, user),
+      );
+
+      // await this.cacheManager.set('test', nearbyUsers,   );
+      const test = await this.cacheManager.set(
+        `nearByUser_${currentUser.user_id}`,
+        userResponses,
+        { ttl: 200 },
+      );
+      if (!test) {
+        console.log(test);
+        console.log(' dữ liệu lên redis');
+      }
+
+      return new ResponseMap(
+        'Tìm kiếm người dùng xung quanh bạn!',
+        userResponses,
+        200,
+      );
+    } catch (error) {
+      console.log(error);
     }
-
-    //loại current user
-    nearbyUsers = nearbyUsers.filter(
-      (nearbyUser) => nearbyUser.user_id !== currentUser.user_id,
-    );
-
-    // TODO: FIX
-
-    // await this.cacheManager.set('test', nearbyUsers,   );
-    const test = await this.cacheManager.set(
-      `nearByUser_${currentUser.user_id}`,
-      nearbyUsers,
-      { ttl: 20 },
-    );
-    if (!test) {
-      console.log(test);
-      console.log(' dữ liệu lên redis');
-    }
-
-    return nearbyUsers;
   }
 
   async deleteCache() {
@@ -131,8 +134,8 @@ export class UserService {
     lng: string,
     radius: number,
     users: User[],
-  ) {
-    const nearbyUsers = [];
+  ): Promise<User[]> {
+    const nearbyUsers: User[] = [];
     for (const user of users) {
       const distance = getDistance(
         {
@@ -159,47 +162,30 @@ export class UserService {
     const hashedPassword = await bcrypt.hash(userDto.password, 10);
     try {
       //check username exists
-      const eUser = await this.userRepository.findOne({
-        where: {
-          username: userDto.username + '',
-        },
-      });
+      const eUser = await this.findByUsername(userDto.username);
 
       if (eUser) {
-        console.log('Người dùng đã tồn tại!');
-
-        throw new HttpException(
-          'User with that email already exists',
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new UserAlreadyExists();
       }
 
-      let createdUser = await this.userRepository.create({
+      let createdUser = this.userRepository.create({
         name: userDto.name + '',
         username: userDto.username + '',
         password: hashedPassword,
       });
 
-      if (!createdUser) {
-        throw new HttpException(
-          'Đăng kí người dùng không thành công',
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
-      console.log('User repository create user');
-
       createdUser = await this.userRepository.save(createdUser);
-      //delete password before response
-      createdUser.password = undefined;
 
+      //map properties returned
+      const userResponse = plainToClass(UserMapResponse, createdUser);
       //create index search user
 
       const result = await this.userSearchService.indexUser(createdUser);
       if (result) {
-        console.log(result + '/n IndexUser thành công');
+        throw new CreateIndexUserError();
       }
 
-      return createdUser;
+      return new ResponseMap('Đăng kí thành công', userResponse, 200);
     } catch (error) {
       throw new HttpException(
         'Something went wrong',
@@ -219,13 +205,10 @@ export class UserService {
       throw new UnauthorizedException('Người dùng này không tồn tại!');
     }
 
-    // const isPasswordMatched = await bcrypt.compare(password, user?.password);
-
-    // const hashpassword = await bcrypt.hash(password, 10);
-    // console.log(hashpassword, password, user.password);
-    // if (user?.password !== hashpassword) {
     if (!(await bcrypt.compare(password, user?.password))) {
-      throw new UnauthorizedException('Đăng nhập thất bại');
+      throw new UnauthorizedException(
+        'Tài khoản hoặc mật khẩu không chính xác',
+      );
     }
 
     const payload = { user_id: user.user_id, username: user.username };
@@ -240,32 +223,34 @@ export class UserService {
         user_id: user.user_id,
         access_token: token,
       });
+    } else {
+      //update access token user
+      oauth1 = await this.oauthRepository.save({
+        ...oauth1,
+        access_token: token,
+      });
     }
+    // lưu token user lên redis
+    this.cacheManager.set(`user-${user.user_id}`, token);
 
-    const nOauth = this.oauthRepository.save(oauth1);
-    console.log(nOauth);
-    return {
-      user_id: user.user_id,
-      token: token,
-      username: user.username,
-    };
+    return new ResponseMap('Đăng nhập thành công', token, 200);
   }
 
-  findByUsername(username: string) {
-    const eUser = this.userRepository.findOne({
-      where: { username: username },
+  async findByUsername(username: string) {
+    const selections = ['avatar', 'username', 'user_id', 'name', 'gender'];
+    const eUser = await this.userRepository.findOne({
+      where: { username: username + '' },
     });
-    console.log('sử dụng findByUsername');
-    return eUser;
+
+    const user = new UserMapResponse(eUser);
+
+    return user;
   }
+
   async create(createUserDto: CreateUserDto) {
-    const newUser = await this.userRepository.create({
+    const newUser = this.userRepository.create({
       ...createUserDto,
     });
-    if (!newUser) {
-      throw new Error('Đăng kí không thành công!');
-    }
-    //đăng kí thành công ->  generate token to oauth
 
     //generate token to save to oauth
     const payload = {
@@ -293,12 +278,16 @@ export class UserService {
     return ids;
   }
 
-  async sendFriendRequest(toUser_id: number, user_id: number) {
-    const user = await this.userRepository.findOne({
-      where: { user_id: toUser_id },
-    });
+  async findByUserId(user_id: number): Promise<User> {
+    const selections = ['avatar', 'username', 'user_id', 'name'];
+    const eUser = await this.userRepository
+      .createQueryBuilder('user')
+      .select(selections)
+      .where('user.user_id = :user_id', { user_id })
+      .andWhere('user.status = :status', { status: 0 })
+      .getOne();
 
-    // if(!)
+    return eUser;
   }
 
   //search user elas

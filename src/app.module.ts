@@ -36,7 +36,7 @@ config();
       password: 'Loc123@@',
       database: 'overate-app',
       entities: [Conversation, Message, User, Oauth, FriendRequest, GatewayDB],
-      // synchronize: true,
+      synchronize: true,
       // autoLoadEntities: true,
     }),
 

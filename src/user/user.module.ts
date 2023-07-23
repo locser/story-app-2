@@ -16,14 +16,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 config();
 @Module({
   controllers: [UserController],
-  providers: [
-    UserService,
-    UsersSearchService,
-    // {
-    //   provide: APP_INTERCEPTOR,
-    //   useClass: CacheInterceptor,
-    // },
-  ],
+  providers: [UserService, UsersSearchService],
   imports: [
     // SearchService,
     ElasticsearchModule.register({

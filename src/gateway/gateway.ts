@@ -6,6 +6,7 @@ import {
   OnGatewayConnection,
   ConnectedSocket,
   OnGatewayDisconnect,
+  WsException,
 } from '@nestjs/websockets';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
@@ -303,45 +304,56 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   //   );
   // }
 
-  //FIXME: now thêm rdis các thứ
-  @SubscribeMessage('getOnlineFriends')
-  async handleFriendListRetrieve(
-    @MessageBody() data: any,
-    @ConnectedSocket() socket: AuthenticatedSocket,
-  ) {
-    const { user } = socket;
-    if (user) {
-      console.log('user is authenticated');
-      console.log(`fetching ${user.username}'s friends`);
-      const { friends } = await this.friendService.getFriends(user.user_id);
-      const onlineFriends: number[] = [];
-      // friends : [1,2,3]
-      friends.map((friend_id) => {
-        const socket = this.sessions.getUserSocket(friend_id);
-        if (socket) {
-          onlineFriends.push(friend_id);
-        }
-      });
+  //FIXME: now thêm rdis các thứi
+  // khi người dùng đăng nhập, load danh sách bạn bè, sẽ gọi tới event rồi báo
+  @OnEvent('friend.online')
+  async handleFriendListRetrieve(payload: any) {
+    const user = payload.user;
+    const friends = payload.friends;
 
-      //danh sách bạn bè online
-      this.sessions.setOnlineFriends(user.user_id, onlineFriends);
+    // if (user) {
+    //   console.log('user is authenticated');
+    //   console.log(`fetching ${user.username}'s friends`);
+    //   const friend_ids = await this.friendService.getFriends(user.user_id);
+    //   console.log(
+    //     '🚀 ~ file: gateway.ts:317 ~ MyGateway ~ friends:',
+    //     friend_ids,
+    //   );
 
-      // TODO: tối ưu
-      // const onlineFriends = friends.filter((friend_id) => {
-      //   const socket = this.sessions.getUserSocket(friend_id);
-      //   return !!socket; // Trả về true nếu socket tồn tại (tức là bạn bè đang trực tuyến)
-      // });
-      //Trong đoạn code này, Array.filter() sẽ lọc danh sách bạn bè và chỉ giữ lại những bạn bè có socket tồn tại (được tìm thấy trong sessions). Kết quả của onlineFriends sẽ là một mảng chứa danh sách bạn bè đang trực tuyến.
+    //   const onlineFriends: number[] = [];
+    //   // friends : [1,2,3]
+    //   friend_ids.map((friend_id) => {
+    //     const socket = this.sessions.getUserSocket(friend_id);
+    //     if (socket) {
+    //       onlineFriends.push(friend_id);
+    //     }
+    //   });
 
-      // const onlineFriends = friends.filter((friend) =>
-      //   this.sessions.getUserSocket(
-      //     user.id === friend.receiver.id
-      //       ? friend.sender.id
-      //       : friend.receiver.id,
-      //   ),
-      // );
-      socket.emit('getOnlineFriends', onlineFriends);
-    }
+    //   //danh sách bạn bè online
+    //   this.sessions.setOnlineFriends(user.user_id, onlineFriends);
+
+    //   // TODO: tối ưu
+    //   // const onlineFriends = friends.filter((friend_id) => {
+    //   //   const socket = this.sessions.getUserSocket(friend_id);
+    //   //   return !!socket; // Trả về true nếu socket tồn tại (tức là bạn bè đang trực tuyến)
+    //   // });
+    //   //Trong đoạn code này, Array.filter() sẽ lọc danh sách bạn bè và chỉ giữ lại những bạn bè có socket tồn tại (được tìm thấy trong sessions). Kết quả của onlineFriends sẽ là một mảng chứa danh sách bạn bè đang trực tuyến.
+
+    //   // const onlineFriends = friends.filter((friend) =>
+    //   //   this.sessions.getUserSocket(
+    //   //     user.id === friend.receiver.id
+    //   //       ? friend.sender.id
+    //   //       : friend.receiver.id,
+    //   //   ),
+    //   // );
+
+    //   // socket.emit('getOnlineFriends', onlineFriends);
+    //   // server  to socket (user_id)
+    //   console.log(
+    //     '🚀 ~ file: gateway.ts:345 ~ MyGateway ~ onlineFriends:',
+    //     onlineFriends,
+    //   );
+    // }
   }
 
   // @SubscribeMessage('newMessage')

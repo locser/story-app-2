@@ -1,17 +1,27 @@
 import { IsNotEmpty } from 'class-validator';
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { User } from 'src/user/entities/user.entity';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  OneToMany,
+  OneToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 @Entity()
 export class FriendRequest {
   @PrimaryGeneratedColumn({ type: 'bigint' })
   request_id: number;
 
-  @Column({ type: 'bigint' })
+  @OneToOne(() => User, { createForeignKeyConstraints: false })
+  @JoinColumn()
   @IsNotEmpty()
-  user_id: number;
+  sender: User;
 
-  @Column({ type: 'bigint' })
+  @OneToOne(() => User, { createForeignKeyConstraints: false })
+  @JoinColumn()
   @IsNotEmpty()
-  toUser_id: number;
+  receiver: User;
 
   @Column({ type: 'int', default: 0 })
   status: number; // 0 is request friend 1 is friend

@@ -1,101 +1,81 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
+import { FriendRequest } from 'src/friend-request/entities/friend-request.entity';
 import { User } from 'src/user/entities/user.entity';
 import { Repository } from 'typeorm';
+import { UserMapResponse } from 'src/user/types/userMapResponse';
+import { ResponseMap } from './../utils/responseMap';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class FriendService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(FriendRequest)
+    private readonly friendRequestRepository: Repository<FriendRequest>,
+    private eventEmitter: EventEmitter2,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   //get friends by current user
   async getFriends(user_id: number): Promise<any> {
-    //get current user
-    const currentUser = await this.userRepository.findOneById(user_id);
+    const friendRequests = await this.friendRequestRepository
+      .createQueryBuilder('friend_request')
+      .where('friend_request.status =1')
+      .leftJoinAndSelect('friend_request.sender', 'sender')
+      .leftJoinAndSelect('friend_request.receiver', 'receiver')
+      .andWhere('(sender.user_id = :user_id OR receiver.user_id = :user_id)', {
+        user_id,
+      })
+      .getMany();
 
-    const friend_ids = currentUser.friends;
+    const users = friendRequests.flatMap((request) => [
+      request.sender,
+      request.receiver,
+    ]);
 
-    const friends: User[] = [];
-
-    friend_ids.forEach(async (friend_id) => {
-      const friend = await this.userRepository.findOneById(friend_id);
-      if (friend) {
-        friends.push(friend);
-      }
-    });
-
-    //TODO: add friends online to redis
-    //get friends online
-
-    return {
-      messsage:
-        friends.length === 0
-          ? 'Bạn chưa có bạn bè, hãy kết bạn!'
-          : 'Lấy danh sách bạn bè thành công!',
-      data: [],
-      status: 200,
-    };
+    const userResponse = users
+      .filter((user) => user.user_id !== user_id)
+      .map((user) => new UserMapResponse(user));
+    //bắn EvenEmitter qua cho
+    return new ResponseMap(
+      friendRequests.length > 0 ? 'Danh sách bạn bè' : 'Bạn chưa có bạn bè!',
+      userResponse,
+      200,
+    );
   }
 
-  findFriendById(user_id: number): Promise<User> {
-    return this.userRepository.findOne({ where: { user_id: user_id } });
+  async findFriendById(user_id: number): Promise<any> {
+    const user: User = await this.userRepository.findOne({
+      where: { user_id: user_id },
+    });
+    return new ResponseMap('Thông tin bạn bè', user, 200);
   }
 
   async deleteFriend(toUser_id: number, user_id: number) {
-    const friend = await this.findFriendById(toUser_id);
-    if (!friend) throw new Error('Không tìm thấy người dùng này!');
-    // console.log(friend);
+    const friendRequest = await this.friendRequestRepository
+      .createQueryBuilder('request')
+      .where(
+        '(request.sender = :user_id AND request.receiver = :toUser_id) OR (request.sender = :toUser_id AND request.receiver = :user_id)',
+        { user_id, toUser_id },
+      )
+      .andWhere('(request.status = 0)')
+      .getOne();
 
-    const index1 = friend.friends.indexOf(user_id);
-
-    //không có trong danh sách bạn bè của người kia
-    if (index1 === -1) {
-      throw new Error(
+    if (friendRequest.status === 0) {
+      return new ResponseMap(
         'Không phải là bạn bè của nhau, không thể thực hiện hành động',
+        [],
+        200,
       );
       //delete friend in friend list
     }
-    friend.friends.splice(index1, 1);
-    console.log(
-      '🚀 ~ file: friend.service.ts:61 ~ FriendService ~ deleteFriend ~ friend.friends :',
-      friend.friends,
-    );
 
-    const user = await this.findFriendById(user_id);
-
-    const index2 = user.friends.indexOf(friend.user_id);
-    user.friends.splice(index2, 1);
-    console.log(
-      '🚀 ~ file: friend.service.ts:66 ~ FriendService ~ deleteFriend ~ user.friends:',
-      user.friends,
-    );
-
-    //update friend list database
-    try {
-      await this.userRepository.save([user, friend]);
-      console.log('Xóa bạn thành công');
-    } catch (error) {
-      console.error('Xóa bạn không thành công', error);
-      throw new Error('Xóa bạn không thành công');
-    }
+    await this.friendRequestRepository.delete(friendRequest.request_id);
 
     return { message: 'xóa bạn bè thành công!', data: [], status: 'success' };
   }
-
-  // isFriends(userOneId: number, userTwoId: number) {
-  //   return this.findOne({
-  //     where: [
-  //       {
-  //          { user_id: userOneId },
-  //         { toUser_id: userTwoId },
-  //       },
-  //       {
-  //         { user_id: userTwoId },
-  //          { toUser_id: userOneId },
-  //       },
-  //     ],
-  //   });
-  // }
 }

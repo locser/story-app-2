@@ -58,6 +58,10 @@ export class User {
   @IsNotEmpty()
   password: string;
 
+  @OneToMany(() => User, (user) => user.friends)
   @Column('int', { array: true, default: [] })
-  friends: number[];
+  friends: User[];
+
+  @Column({ type: 'int', default: 0 })
+  status: number;
 }
