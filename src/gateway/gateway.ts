@@ -12,7 +12,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
 import { Inject } from '@nestjs/common';
 import { AuthService } from 'src/auth/auth.service';
-import { IGatewaySessionManager } from './gateway.session';
+import { IGatewaySessionManager, UserSocket } from './gateway.session';
 import { AuthenticatedSocket } from 'src/utils/interfaces';
 import { CreateMessageResponse } from 'src/utils/types';
 import { Conversation } from 'src/conversation/entities/conversation.entity';
@@ -26,6 +26,7 @@ import { GatewayService } from './gateway.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { FriendService } from 'src/friend/friend.service';
+import { UserMapResponse } from 'src/user/types/userMapResponse';
 
 @WebSocketGateway()
 export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -45,6 +46,7 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private friendService: FriendService,
   ) {}
 
+  // ws = new WebSocket('ws://localhost:3002');
   @WebSocketServer()
   server: Server;
 
@@ -61,8 +63,9 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } else {
       // add vào sessions các user đang hoạt động
       //add socket vào redis server
+      client.user = currentUser;
 
-      await this.sessions.setUserSocket(currentUser.user_id, client);
+      await this.sessions.setUserSocket(client);
 
       console.log(
         `Socket -User ${currentUser.user_id} connected with Socket: ${client.id} `,
@@ -90,7 +93,7 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
       +conversation_id,
     );
     if (!conversation) {
-      throw new Error(`Could not find conversation`);
+      console.log(`Could not find conversation`);
     }
     const checkAccess = this.conversationService.hasAccess(
       conversation.members,
@@ -98,7 +101,7 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
     if (checkAccess === false) {
       console.log(conversation.members);
-      throw new Error(`Bạn không có quyền truy cập cuộc trò chuyện này!`);
+      console.log(`Bạn không có quyền truy cập cuộc trò chuyện này!`);
     }
 
     return true;
@@ -128,11 +131,12 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client = this.leaveAllRooms(client);
 
       client.join(`conversation-${body.conversation_id}`); // thêm socket của client vào một phòng
+      this.sessions.setUserSocket(client);
       console.log(client.rooms); //Đây là thuộc tính của socket và chứa danh sách các phòng mà socket hiện đang tham gia.
       client.to(`conversation-${conversation_id}`).emit(`userJoin`);
       //gửi một sự kiện có tên là 'userJoin' tới tất cả các socket trong phòng có tên là 'conversation-{conversationId}', trừ chính socket của client hiện đang xử lý sự kiện.
     } else {
-      throw new Error('Có lỗi xảy ra!');
+      console.log('Có lỗi xảy ra!');
     }
   }
 
@@ -170,7 +174,7 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
       console.log(client.rooms);
       client.to(`${data.conversation_id}`).emit('userLeave');
     } else {
-      throw new Error(`Có lỗi xảy ra!`);
+      console.log(`Có lỗi xảy ra!`);
     }
   }
 
@@ -222,67 +226,62 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @OnEvent('message.create') // là một decorator được sử dụng để đăng ký một event handler (bộ xử lý sự kiện) cho một sự kiện cụ thể trong ứng dụng.
-  handleMessageCreateEvent(payload: CreateMessageResponse) {
+  async handleMessageCreateEvent(payload: CreateMessageResponse) {
     console.log('Inside message.create');
 
     const { message, conversation } = payload;
 
-    const userSocket = this.sessions.getUserSocket(message.user_id); // người gửi
-    // lây thông tin người nhận = cách loại user hiện tại ra khỏi danh sách memeber trong conversation
-    // check xem  nó có online không
-    // const recipientSocket_ids = conversation.members.filter(
-    //   (member) => member !== message.user_id,
-    // );
-
-    // Lấy danh sách các user socket còn lại trong socket đang online
-    // Lọc ra các user socket còn lại trong socket đang online và có trong sessions
-    // const recipientSockets: Socket[] = [];
-
-    // recipientSocket_ids.forEach((recipientSocket_id) => {
-    //   const recipientSocket = this.sessions.getUserSocket(recipientSocket_id);
-    //   if (recipientSocket) {
-    //     // check if the socket exists
-    //     recipientSockets.push(recipientSocket);
-    //   }
-    // });
-
-    // const recipientSockets = this.filterUserInConversation(
-    //   +message.user_id,
-    //   conversation.members,
-    // );
-
-    // recipientSockets.forEach((recipientSocket) =>
-    //   recipientSocket.emit('onMessage', payload),
-    // );
+    // const userSocket = await this.sessions.getUserSocket(message.user_id); // người gửi
 
     this.server
       .to(`conversation-${conversation.conversation_id}`)
-      .emit('onMessage', message.message);
+      .emit(
+        'onMessage',
+        `Nguời dùng ${message.user_id} gửi tin nhắn với nội dung: '${message.message}' tới cuộc trò chuyện ${conversation.name}`,
+      );
+    //bắn cho user ngoài room.
+    const memberIds: number[] = this.filterUserInConversation(
+      message.user_id,
+      conversation.members,
+    );
 
-    // // Nếu authorSocket tồn tại, ta gửi sự kiện 'onMessage' tới socket này với dữ liệu payload
-    // if (userSocket) userSocket.emit('onMessage', payload);
-    // // nếu recipientSocket tồn tại, ta cũng gửi sự kiện 'onMessage' tới socket này với dữ liệu payload
-    // if (recipientSocket) recipientSocket.emit('onMessage', payload);
+    const socketMembers: UserSocket[] = [];
+    for (let i = 0; i < memberIds.length; i++) {
+      const redisSocket: UserSocket = await this.sessions.getUserSocket(
+        memberIds[i],
+      );
+
+      if (redisSocket !== null) {
+        if (
+          redisSocket.room !== `conversation-${conversation.conversation_id}` &&
+          redisSocket.room !== ''
+        ) {
+          socketMembers.push(redisSocket);
+        }
+      }
+    }
+
+    if (socketMembers.length > 0) {
+      socketMembers.forEach((socketMember) => {
+        this.server
+          .to(socketMember.socket_id)
+          .emit(
+            'onMessage',
+            `Nguời dùng ${message.user_id} gửi tin nhắn với nội dung: '${message.message}' tới cuộc trò chuyện ${conversation.name}`,
+          );
+      });
+    } else {
+      console.log('Không có ai online để bắn ');
+    }
   }
 
   // Lọc ra các user socket còn lại trong socket đang online và có trong sessions
-  filterUserInConversation(user_id: number, members: number[]): Socket[] {
+  filterUserInConversation(user_id: number, members: number[]): number[] {
     // lây thông tin người nhận = cách loại user hiện tại ra khỏi danh sách memeber trong conversation
     // check xem  nó có online không
-    const recipientSocket_ids = members.filter((member) => member !== user_id);
-    // Lấy danh sách các user socket còn lại trong socket đang online
-    // Lọc ra các user socket còn lại trong socket đang online và có trong sessions
-    const recipientSockets: Socket[] = [];
+    const recipient_ids = members.filter((member) => member !== user_id);
 
-    recipientSocket_ids.forEach((recipientSocket_id) => {
-      const recipientSocket = this.sessions.getUserSocket(recipientSocket_id);
-      if (recipientSocket) {
-        // check if the socket exists
-        recipientSockets.push(recipientSocket);
-      }
-    });
-
-    return recipientSockets;
+    return recipient_ids;
   }
 
   // @OnEvent('conversation.create')
@@ -308,52 +307,24 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // khi người dùng đăng nhập, load danh sách bạn bè, sẽ gọi tới event rồi báo
   @OnEvent('friend.online')
   async handleFriendListRetrieve(payload: any) {
-    const user = payload.user;
     const friends = payload.friends;
+    const user_id = payload.user_id;
+    const socketMembers: UserSocket[] = [];
+    const friendOnlines: UserMapResponse[] = [];
+    for (let i = 0; i < friends.length; i++) {
+      const redisSocket: UserSocket = await this.sessions.getUserSocket(
+        friends[i].user_id,
+      );
 
-    // if (user) {
-    //   console.log('user is authenticated');
-    //   console.log(`fetching ${user.username}'s friends`);
-    //   const friend_ids = await this.friendService.getFriends(user.user_id);
-    //   console.log(
-    //     '🚀 ~ file: gateway.ts:317 ~ MyGateway ~ friends:',
-    //     friend_ids,
-    //   );
-
-    //   const onlineFriends: number[] = [];
-    //   // friends : [1,2,3]
-    //   friend_ids.map((friend_id) => {
-    //     const socket = this.sessions.getUserSocket(friend_id);
-    //     if (socket) {
-    //       onlineFriends.push(friend_id);
-    //     }
-    //   });
-
-    //   //danh sách bạn bè online
-    //   this.sessions.setOnlineFriends(user.user_id, onlineFriends);
-
-    //   // TODO: tối ưu
-    //   // const onlineFriends = friends.filter((friend_id) => {
-    //   //   const socket = this.sessions.getUserSocket(friend_id);
-    //   //   return !!socket; // Trả về true nếu socket tồn tại (tức là bạn bè đang trực tuyến)
-    //   // });
-    //   //Trong đoạn code này, Array.filter() sẽ lọc danh sách bạn bè và chỉ giữ lại những bạn bè có socket tồn tại (được tìm thấy trong sessions). Kết quả của onlineFriends sẽ là một mảng chứa danh sách bạn bè đang trực tuyến.
-
-    //   // const onlineFriends = friends.filter((friend) =>
-    //   //   this.sessions.getUserSocket(
-    //   //     user.id === friend.receiver.id
-    //   //       ? friend.sender.id
-    //   //       : friend.receiver.id,
-    //   //   ),
-    //   // );
-
-    //   // socket.emit('getOnlineFriends', onlineFriends);
-    //   // server  to socket (user_id)
-    //   console.log(
-    //     '🚀 ~ file: gateway.ts:345 ~ MyGateway ~ onlineFriends:',
-    //     onlineFriends,
-    //   );
-    // }
+      if (redisSocket !== null) {
+        socketMembers.push(redisSocket);
+        friendOnlines.push(friends[i]);
+      }
+    }
+    console.log(`danh sách bạn bè online của user : ${socketMembers}`);=
+    this.cacheManager.set(`user-${user_id}-friends-online`, friendOnlines, {
+      ttl: 0,
+    });
   }
 
   // @SubscribeMessage('newMessage')
