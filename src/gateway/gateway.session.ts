@@ -9,7 +9,7 @@ import { Cache } from 'cache-manager';
 
 export interface IGatewaySessionManager {
   getUserSocket(id: number);
-  setUserSocket(id: number, socket: AuthenticatedSocket): void;
+  setUserSocket(socket: AuthenticatedSocket): void;
   removeUserSocket(id: number): void;
   getSockets();
   setOnlineFriends(user_id: number, onlineFriends: number[]);
@@ -23,19 +23,34 @@ export class GatewaySessionManager implements IGatewaySessionManager {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  getUserSocket(user_id: number) {
-    const socket = this.cacheManager.get(`user-${user_id}`);
+  async getUserSocket(user_id: number): Promise<UserSocket> {
+    const socket: any = await this.cacheManager.get(`user-${user_id}`);
 
-    return socket;
+    console.log(
+      '🚀 ~ file: gateway.session.ts:29 ~ GatewaySessionManager ~ getUserSocket ~ socket:',
+      socket,
+    );
+    const redisSocket: UserSocket = {
+      socket_id: socket?.socket_id || '',
+      room: socket?.room || '',
+    };
+    return redisSocket;
   }
 
-  async setUserSocket(userId: number, socket: AuthenticatedSocket) {
+  async setUserSocket(socket: AuthenticatedSocket): Promise<any> {
     //save to database
+
     const result = await this.gatewayRepository.save({
-      user_id: userId,
+      user_id: socket.user.user_id,
       socket_id: socket.id,
     });
-    this.cacheManager.set(`user-${result.user_id}`, socket.id, {
+
+    const redisSocket: UserSocket = {
+      socket_id: socket.id,
+      room: Array.from(socket.rooms)[1] || 'no',
+    };
+
+    await this.cacheManager.set(`user-${result.user_id}`, redisSocket, {
       ttl: 0,
     });
   }
@@ -54,6 +69,11 @@ export class GatewaySessionManager implements IGatewaySessionManager {
       ttl: 0,
     });
   }
+}
+
+export class UserSocket {
+  socket_id: string;
+  room: string;
 }
 
 // const test = await this.cacheManager.set(

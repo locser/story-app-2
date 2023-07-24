@@ -146,7 +146,7 @@ export class FriendRequestService {
     if (friendRequest.receiver.user_id !== toUser_id)
       return new ResponseMap('Lỗi lời mời kết bạn', [], 200);
 
-    const result = this.friendRequestRepository.delete(friendRequest);
+    const result = this.friendRequestRepository.delete(request_id);
 
     if (!result) {
       return new ResponseMap('Xóa lời mời kết bạn không thành công!', [], 200);

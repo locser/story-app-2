@@ -321,7 +321,7 @@ export class MyGateway implements OnGatewayConnection, OnGatewayDisconnect {
         friendOnlines.push(friends[i]);
       }
     }
-    console.log(`danh sách bạn bè online của user : ${socketMembers}`);=
+    console.log(`danh sách bạn bè online của user : ${socketMembers}`);
     this.cacheManager.set(`user-${user_id}-friends-online`, friendOnlines, {
       ttl: 0,
     });

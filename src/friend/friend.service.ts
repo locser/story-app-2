@@ -41,6 +41,11 @@ export class FriendService {
       .filter((user) => user.user_id !== user_id)
       .map((user) => new UserMapResponse(user));
     //bắn EvenEmitter qua cho
+    const payload = {
+      friends: userResponse,
+      user_id: user_id,
+    };
+    this.eventEmitter.emit('friend.online', payload);
     return new ResponseMap(
       friendRequests.length > 0 ? 'Danh sách bạn bè' : 'Bạn chưa có bạn bè!',
       userResponse,

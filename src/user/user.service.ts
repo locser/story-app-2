@@ -211,6 +211,9 @@ export class UserService {
       );
     }
 
+    user.status = 0;
+    await this.userRepository.save(user);
+
     const payload = { user_id: user.user_id, username: user.username };
     const token = await this.jwtService.signAsync(payload);
 
@@ -230,6 +233,7 @@ export class UserService {
         access_token: token,
       });
     }
+
     // lưu token user lên redis
     this.cacheManager.set(`user-${user.user_id}`, token);
 
@@ -275,7 +279,7 @@ export class UserService {
     const ids = results.filter(
       (result) => result.user_id + '' !== user_id + '',
     );
-    return ids;
+    return new ResponseMap('Search elastic', ids, 200);
   }
 
   async findByUserId(user_id: number): Promise<User> {
@@ -288,6 +292,14 @@ export class UserService {
       .getOne();
 
     return eUser;
+  }
+
+  disableUser(req: any) {
+    req.user.status = 1;
+    this.userRepository.save(req.user);
+
+    delete req.header['authorization'];
+    return new ResponseMap('Vô hiệu hóa tài khoản', [], 200);
   }
 
   //search user elas

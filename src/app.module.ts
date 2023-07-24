@@ -22,6 +22,7 @@ import { FriendModule } from './friend/friend.module';
 import { FriendRequest } from './friend-request/entities/friend-request.entity';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { GatewayDB } from './gateway/entity/gatewayDB.entity';
+import { GroupModule } from './group/group.module';
 
 config();
 
@@ -60,6 +61,7 @@ config();
     AuthModule,
     FriendRequestModule,
     FriendModule,
+    // GroupModule,
   ],
   controllers: [AppController],
   providers: [

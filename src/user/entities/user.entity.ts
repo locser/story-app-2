@@ -1,7 +1,14 @@
 import { IsNotEmpty } from 'class-validator';
+import { Group } from 'src/group/entities/group.entity';
 import { Message } from 'src/message/entities/message.entity';
 import { Oauth } from 'src/oauth/entities/oauth.entity';
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  ManyToMany,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity()
 export class User {
@@ -58,10 +65,13 @@ export class User {
   @IsNotEmpty()
   password: string;
 
-  @OneToMany(() => User, (user) => user.friends)
-  @Column('int', { array: true, default: [] })
-  friends: User[];
+  // @OneToMany(() => User, (user) => user.friends)
+  // @Column('int', { array: true, default: [] })
+  // friends: User[];
 
   @Column({ type: 'int', default: 0 })
   status: number;
+
+  // @ManyToMany(() => Group, (group) => group.users)
+  // groups: Group[];
 }
